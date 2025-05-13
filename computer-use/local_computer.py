@@ -2,11 +2,11 @@ import asyncio
 import base64
 import io
 import platform
-
 import pyautogui
 
+from basecomputer import BaseComputer
 
-class LocalComputer:
+class LocalComputer(BaseComputer):
     """Use pyautogui to take screenshots and perform actions on the local computer."""
 
     def __init__(self):
@@ -39,7 +39,7 @@ class LocalComputer:
         buffer.seek(0)
         data = bytearray(buffer.getvalue())
         return base64.b64encode(data).decode("utf-8")
-
+    
     async def click(self, x: int, y: int, button: str = "left") -> None:
         width, height = self.size
         if 0 <= x < width and 0 <= y < height:

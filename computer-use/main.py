@@ -8,14 +8,15 @@ import argparse
 import asyncio
 import logging
 import os
-
+from dotenv import load_dotenv
 import cua
 import local_computer
 import openai
+import vm_computer
 
 
 async def main():
-
+    load_dotenv()
     logging.basicConfig(level=logging.WARNING, format="%(message)s")
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
@@ -25,12 +26,12 @@ async def main():
         default="Open web browser and go to microsoft.com.",
         help="Instructions to follow")
     parser.add_argument("--model", dest="model",
-        default="computer-use-preview")
+        default="tekaisandbox-computer-use-preview")
     parser.add_argument("--endpoint", default="azure",
         help="The endpoint to use, either OpenAI or Azure OpenAI")
     parser.add_argument("--autoplay", dest="autoplay", action="store_true",
         default=True, help="Autoplay actions without confirmation")
-    parser.add_argument("--environment", dest="environment", default="linux")
+    parser.add_argument("--environment", dest="environment", default="linux_vm")
     args = parser.parse_args()
 
     if args.endpoint == "azure":
@@ -50,9 +51,18 @@ async def main():
     # Scaler is used to resize the screen to a smaller size
     computer = cua.Scaler(computer, (1024, 768))
 
-    # Agent to run the CUA model and keep track of state
-    agent = cua.Agent(client, model, computer)
-
+    #vm implementation    
+    vm = vm_computer.VMComputer(
+        hostname=os.getenv("VM_HOSTNAME"),
+        username=os.getenv("VM_USERNAME"),
+        password=os.getenv("VM_PASSWORD"),
+    )
+    vm = cua.Scaler(vm, (1024, 768))
+    
+    if args.environment == "linux_vm":
+        agent = cua.Agent(client, model, vm)
+    else:
+        agent = cua.Agent(client, model, computer)
     # Get the user request
     if args.instructions:
         user_input = args.instructions
@@ -60,6 +70,7 @@ async def main():
         user_input = input("Please enter the initial task: ")
 
     logger.info(f"User: {user_input}")
+    
     agent.start_task()
     while True:
         if not user_input and agent.requires_user_input:
