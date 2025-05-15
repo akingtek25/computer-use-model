@@ -53,12 +53,7 @@ if __name__ == "__main__":
     logger.setLevel(logging.DEBUG)
 
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--instructions",
-        dest="instructions",
-        default="Open web browser and go to microsoft.com.",
-        help="Instructions to follow",
-    )
+
     parser.add_argument(
         "--model", dest="model", default="tekaisandbox-computer-use-preview"
     )
@@ -79,8 +74,8 @@ if __name__ == "__main__":
 
     if args.endpoint == "azure":
         client = openai.AsyncAzureOpenAI(
-            azure_endpoint=os.environ["AZURE_OPENAI_ENDPOINT"],
-            api_key=os.environ["AZURE_OPENAI_API_KEY"],
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
             api_version="2025-03-01-preview",
         )
     else:
@@ -88,17 +83,17 @@ if __name__ == "__main__":
 
     model = args.model
     computer = local_computer.LocalComputer()
-    computer = cua.Scaler(computer, (1024, 768))
+    computer = cua.Scaler(computer, logger, (1024, 768))
     vm = vm_computer.VMComputer(
         hostname=os.getenv("VM_HOSTNAME"),
         username=os.getenv("VM_USERNAME"),
         password=os.getenv("VM_PASSWORD"),
     )
-    vm = cua.Scaler(vm, (1024, 768))
+    vm = cua.Scaler(vm, logger, (1024, 768))
 
     if args.environment == "linux_vm":
         agent = cua.Agent(client, model, vm)
-    else:
+    elif args.environment == "local":
         agent = cua.Agent(client, model, computer)
 
     window = userinterface.MainWindow(vm)

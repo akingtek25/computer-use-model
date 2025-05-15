@@ -5,6 +5,7 @@ import paramiko
 from PIL import Image
 from basecomputer import BaseComputer
 import time
+from keys import PYAUTOGUI_TO_XDOTOOL
 
 
 class VMComputer(BaseComputer):
@@ -96,20 +97,19 @@ class VMComputer(BaseComputer):
 
     async def scroll(self, x: int, y: int, scroll_x: int, scroll_y: int) -> None:
         await self._connect()
-        # xdotool doesn't support scroll directly, but mouse wheel events are buttons 4 (up) and 5 (down)
-        # Positive scroll_y = up, negative = down
         display = ":0"
         xauth = f"/home/{self.username}/.Xauthority"
+        # Vertical scroll: use Page_Up (up) and Page_Down (down)
         if scroll_y != 0:
-            btn = 4 if scroll_y > 0 else 5
+            key = "Page_Up" if scroll_y > 0 else "Page_Down"
             for _ in range(abs(scroll_y)):
-                cmd = f"DISPLAY={display} XAUTHORITY={xauth} xdotool mousemove {x} {y} click {btn}"
+                cmd = f"DISPLAY={display} XAUTHORITY={xauth} xdotool key {key}"
                 await asyncio.to_thread(self.client.exec_command, cmd)
-        # For horizontal scroll, buttons 6 (left) and 7 (right)
+        # Horizontal scroll: use Left (left) and Right (right) arrow keys
         if scroll_x != 0:
-            btn = 6 if scroll_x > 0 else 7
+            key = "Left" if scroll_x > 0 else "Right"
             for _ in range(abs(scroll_x)):
-                cmd = f"DISPLAY={display} XAUTHORITY={xauth} xdotool mousemove {x} {y} click {btn}"
+                cmd = f"DISPLAY={display} XAUTHORITY={xauth} xdotool key {key}"
                 await asyncio.to_thread(self.client.exec_command, cmd)
 
     async def type(self, text: str) -> None:
@@ -133,13 +133,24 @@ class VMComputer(BaseComputer):
 
     async def keypress(self, keys: list[str]) -> None:
         await self._connect()
-        # Join keys for xdotool
+    # Join keys for xdotool
         display = ":0"
         xauth = f"/home/{self.username}/.Xauthority"
-        key_str = " ".join(keys)
-        if("ENTER" in key_str):
-            key_str = key_str.replace("ENTER", "Return")
+
+        mapped_keys = []
+        for key in keys:
+            # Convert single alphabetical characters to uppercase
+            if len(key) == 1 and key.isalpha():
+                mapped_keys.append(key.lower())
+            else:
+            # Use the mapping for special keys, or the original key if not in mapping
+                mapped_keys.append(PYAUTOGUI_TO_XDOTOOL.get(key.lower(), key))
+        
+        
+        key_str = "+".join(mapped_keys)
+
         cmd = f"DISPLAY={display} XAUTHORITY={xauth} xdotool key {key_str}"
+        print(f"xdotool command: {cmd}")
         await asyncio.to_thread(self.client.exec_command, cmd)
 
     async def drag(self, path: list[tuple[int, int]]) -> None:

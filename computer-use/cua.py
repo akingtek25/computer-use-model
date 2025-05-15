@@ -12,11 +12,12 @@ import PIL
 class Scaler:
     """Wrapper for a computer that performs resizing and coordinate translation."""
 
-    def __init__(self, computer, dimensions: tuple[int, int] | None = None):
+    def __init__(self, computer, logger, dimensions: tuple[int, int] | None = None):
         self.computer = computer
         self.size = dimensions
         self.screen_width = -1
         self.screen_height = -1
+        self.logger = logger
 
     @property
     def environment(self):
@@ -38,26 +39,31 @@ class Scaler:
         return self.size
 
     async def screenshot(self) -> str:
-        # Take a screenshot from the actual computer
-        screenshot = await self.computer.screenshot()
-        screenshot = base64.b64decode(screenshot)
-        buffer = io.BytesIO(screenshot)
-        image = PIL.Image.open(buffer)
-        # Scale the screenshot
-        self.screen_width, self.screen_height = image.size
-        width, height = self.dimensions
-        ratio = min(width / self.screen_width, height / self.screen_height)
-        new_width = int(self.screen_width * ratio)
-        new_height = int(self.screen_height * ratio)
-        new_size = (new_width, new_height)
-        resized_image = image.resize(new_size, PIL.Image.Resampling.LANCZOS)
-        image = PIL.Image.new("RGB", (width, height), (0, 0, 0))
-        image.paste(resized_image, (0, 0))
-        buffer = io.BytesIO()
-        image.save(buffer, format="PNG")
-        buffer.seek(0)
-        data = bytearray(buffer.getvalue())
-        return base64.b64encode(data).decode("utf-8")
+        try:
+            # Take a screenshot from the actual computer
+            screenshot = await self.computer.screenshot()
+            screenshot = base64.b64decode(screenshot)
+            buffer = io.BytesIO(screenshot)
+            image = PIL.Image.open(buffer)
+            # Scale the screenshot
+            self.screen_width, self.screen_height = image.size
+            width, height = self.dimensions
+            ratio = min(width / self.screen_width, height / self.screen_height)
+            new_width = int(self.screen_width * ratio)
+            new_height = int(self.screen_height * ratio)
+            new_size = (new_width, new_height)
+            resized_image = image.resize(new_size, PIL.Image.Resampling.LANCZOS)
+            image = PIL.Image.new("RGB", (width, height), (0, 0, 0))
+            image.paste(resized_image, (0, 0))
+            buffer = io.BytesIO()
+            image.save(buffer, format="PNG")
+            buffer.seek(0)
+            data = bytearray(buffer.getvalue())
+            return base64.b64encode(data).decode("utf-8")
+        except Exception as e:
+            # Create a simple error image to allow the system to continue
+            if self.logger:
+                self.logger.error(f"Screenshot error: {str(e)}")
 
     async def click(self, x: int, y: int, button: str = "left") -> None:
         x, y = self._point_to_screen_coords(x, y)
@@ -234,6 +240,13 @@ class Agent:
                 if self.logger:
                     message = f"Rate limit exceeded. Waiting for {wait} seconds."
                     self.logger.info(message)
+            except openai.APIStatusError as e:
+                # Retry on server error 499 or type 'server_error'
+                if hasattr(e, "status_code") and e.status_code == 499:
+                    wait = 5
+                    if self.logger:
+                        self.logger.warning("APIStatusError 499: Retrying after 5 seconds.")
+                        break
         if self.logger:
             self.logger.critical("Max retries exceeded.")
 
